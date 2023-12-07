@@ -4,32 +4,23 @@ import tkinter as tk
 import pandas as pd
 from tkinter import scrolledtext
 import tkinter.filedialog as filedialog
+import chromadb
 openai.api_key = open("./apikey.txt", 'r').read().strip()
+client = chromadb.PersistentClient()
+
+client.delete_collection("kakao")
+collection = client.get_or_create_collection(
+    name="kakao",
+    metadata={"hnsw:space": "cosine"}# l2 is the default
+)
 
 
-# response에 CSV 형식이 있는지 확인하고 있으면 저장하기
-def save_to_csv(df):
-    file_path = filedialog.asksaveasfilename(defaultextension='.csv')
-    if file_path:
-        df.to_csv(file_path, sep=';', index=False, lineterminator='\n')
-        return f'파일을 저장했습니다. 저장 경로는 다음과 같습니다. \n {file_path}\n'
-    return '저장을 취소했습니다'
-
-
-def save_playlist_as_csv(playlist_csv):
-    if ";" in playlist_csv:
-        lines = playlist_csv.strip().split("\n")
-        csv_data = []
-
-        for line in lines:
-            if ";" in line:
-                csv_data.append(line.split(";"))
-
-        if len(csv_data) > 0:
-            df = pd.DataFrame(csv_data[1:], columns=csv_data[0])
-            return save_to_csv(df)
-
-    return f'저장에 실패했습니다. \n저장에 실패한 내용은 다음과 같습니다. \n{playlist_csv}'
+def kakaotalk_query(keyword):
+    print(f"funtion called. keyword : {keyword}")
+    return collection.query(
+        query_texts="지원하는 기능",
+        n_results=1
+    )['documents'][0][0]
 
 
 def send_message(message_log, functions=None, gpt_model="gpt-3.5-turbo", temperature=0.1):
@@ -52,7 +43,7 @@ def send_message(message_log, functions=None, gpt_model="gpt-3.5-turbo", tempera
 
     if response_message.get("function_call"):
         available_functions = {
-            "save_playlist_as_csv": save_playlist_as_csv,
+            "kakaotalk_query": kakaotalk_query,
         }
         function_name = response_message["function_call"]["name"]
         fuction_to_call = available_functions[function_name]
@@ -78,8 +69,54 @@ def send_message(message_log, functions=None, gpt_model="gpt-3.5-turbo", tempera
     return response.choices[0].message.content
 
 
+def parse_to_documents(text):
+    documents = []
+    lines = text.split('\n')
+
+    current_doc = None
+
+    for line in lines:
+        if line.startswith('#'):
+            if current_doc:
+                documents.append(current_doc)
+            current_doc = {'title': line.lstrip('#').strip(), 'content': ''}
+        elif current_doc is not None:
+            current_doc['content'] += line.strip() + ' '
+
+    # Add the last document if it exists
+    if current_doc:
+        documents.append(current_doc)
+
+    # Remove trailing whitespaces from content
+    for doc in documents:
+        doc['content'] = doc['content'].strip()
+
+    return documents
+
+
+def preprocess(data):
+    documents = parse_to_documents(data)
+    ids = []
+    docs = []
+    for doc in documents:
+        ids.append(doc.get("title"))
+        docs.append(str(doc).strip().replace(' ', ''))
+        print(str(doc).strip().replace(' ', ''))
+
+    # DB 저장
+    collection.add(
+        ids=ids,
+        documents=docs,
+    )
+
+
 def main():
     chatdata = open("./data/project_data_카카오톡채널.txt", 'r').read().strip()
+    preprocess(chatdata)
+    print(collection.query(
+        query_texts="지원하는 기능",
+        n_results=1
+    )['documents'][0][0])
 
     message_log = [
         {
@@ -87,15 +124,26 @@ def main():
             "content": f'''
             # You are a chatbot that answers information/usage about '카카오톡채널'.
             # Your user is korean. So answer question in korean.
-            # Infomation about '카카오톡채널' is given blow
-            \'\'\'
-            {chatdata}
-            \'\'\'
             '''
         }
     ]
 
-    functions = None
+    functions = [
+        {
+            "name": "kakaotalk_query",
+            "description": "Gives you infomation about 카카오톡채널",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keyword": {
+                        "type": "string",
+                        "description": "A keyword you want to know about 카카오톡 채널. The max length should be 20.",
+                    },
+                },
+                "required": ["keyword"],
+            },
+        }
+    ]
 
     def show_popup_message(window, message):
         popup = tk.Toplevel(window)
