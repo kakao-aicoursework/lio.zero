@@ -1,9 +1,7 @@
 import json
 import openai
 import tkinter as tk
-import pandas as pd
 from tkinter import scrolledtext
-import tkinter.filedialog as filedialog
 import chromadb
 openai.api_key = open("./apikey.txt", 'r').read().strip()
 client = chromadb.PersistentClient()
