@@ -14,7 +14,7 @@ async def home():
     page = """
     <html>
         <body>
-            <h2>카카오 챗봇빌더 스킬 예제입니다 :)</h2>
+            <h2>lio.zero 카카오 챗봇 :)</h2>
         </body>
     </html>
     """
