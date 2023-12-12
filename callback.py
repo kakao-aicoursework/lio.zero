@@ -1,5 +1,6 @@
 from dto import ChatbotRequest
-import aiohttp
+import requests
+import json
 import logging
 import openai
 
@@ -9,13 +10,14 @@ SYSTEM_MSG = f'''
             # You are a chatbot that answers information/usage about '카카오톡싱크'.
             # Your user is korean. So answer question in korean.
             # Information about '카카오톡싱크' is given below
+            # answer should be less then 200 letters
             {chatdata}
             '''
 logger = logging.getLogger("Callback")
 
-async def callback_handler(request: ChatbotRequest) -> dict:
 
-    # ===================== start =================================
+def callback_handler(request: ChatbotRequest) -> dict:
+
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -24,11 +26,9 @@ async def callback_handler(request: ChatbotRequest) -> dict:
         ],
         temperature=0,
     )
-    # focus
-    print(response.choices[0].message.content)
+
     output_text = response.choices[0].message.content
 
-   # 참고링크 통해 payload 구조 확인 가능
     payload = {
         "version": "2.0",
         "template": {
@@ -41,15 +41,7 @@ async def callback_handler(request: ChatbotRequest) -> dict:
             ]
         }
     }
-    # ===================== end =================================
-    # 참고링크1 : https://kakaobusiness.gitbook.io/main/tool/chatbot/skill_guide/ai_chatbot_callback_guide
-    # 참고링크1 : https://kakaobusiness.gitbook.io/main/tool/chatbot/skill_guide/answer_json_format
 
-    # time.sleep(1.0)
-    print(request.userRequest.callbackUrl)
     url = request.userRequest.callbackUrl
 
-    if url:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url=url, json=payload, ssl=False) as resp:
-                await resp.json()
+    response = requests.post(url=url, data=json.dumps(payload), headers={"Content-Type": "application/json"})
