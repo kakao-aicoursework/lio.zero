@@ -11,9 +11,9 @@ import logging
 import openai
 import vector_db
 
-os.environ["OPENAI_API_KEY"] = "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"
 chatdata = open("./data/project_data_카카오싱크.txt", 'r').read().strip()
 openai.api_key = open("./apikey.txt", 'r').read().strip()
+os.environ["OPENAI_API_KEY"] = openai.api_key
 TEMPLATE = """
 # You are a chatbot that answers information/usage about '카카오싱크'.
 # Your user is korean. So answer question in korean.
